@@ -17,11 +17,8 @@ const (
 )
 
 type Subscriber[Payload proto.Message] struct {
-	errorHandler func(error)
-	eventsChan   chan struct {
-		EventKey bus.EventKey
-		Payload  Payload
-	}
+	errorHandler       func(error)
+	eventsChan         chan bus.Event[Payload]
 	payloadFactory     func() Payload
 	publishers         map[bus.PublisherEndpoint]struct{}
 	publishersMx       sync.Mutex
@@ -40,11 +37,8 @@ func New[Payload proto.Message](
 	errorHandler func(error),
 ) (*Subscriber[Payload], error) {
 	s := &Subscriber[Payload]{
-		errorHandler: errorHandler,
-		eventsChan: make(chan struct {
-			EventKey bus.EventKey
-			Payload  Payload
-		}),
+		errorHandler:       errorHandler,
+		eventsChan:         make(chan bus.Event[Payload]),
 		payloadFactory:     payloadFactory,
 		publishers:         make(map[bus.PublisherEndpoint]struct{}),
 		readerShutdownChan: make(chan struct{}),
@@ -73,10 +67,7 @@ func New[Payload proto.Message](
 	return s, nil
 }
 
-func (s *Subscriber[Payload]) EventsChan() <-chan struct {
-	EventKey bus.EventKey
-	Payload  Payload
-} {
+func (s *Subscriber[Payload]) EventsChan() <-chan bus.Event[Payload] {
 	return s.eventsChan
 }
 
@@ -167,12 +158,9 @@ func (s *Subscriber[Payload]) reader() {
 		}
 
 		select {
-		case s.eventsChan <- struct {
-			EventKey bus.EventKey
-			Payload  Payload
-		}{
-			EventKey: eventKey,
-			Payload:  payload,
+		case s.eventsChan <- bus.Event[Payload]{
+			EventKey:     eventKey,
+			EventPayload: payload,
 		}:
 		case <-s.readerShutdownChan:
 			return
